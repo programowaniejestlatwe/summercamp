@@ -16,13 +16,19 @@
 // do spowalniania czasu
 #include <unistd.h>
 
+// do time()
+#include <time.h>
+
+// do obsługi klawiatury
+#include <ncursesw/ncurses.h>
+
 /*
  * rozmiar planszy, po ktorej porusza sie waz,
  * moze byc dowolny rozmiar, dla ulatwienia przyjmijmy
  * 10x10
  */
-#define ROZMIAR_PLANSZY_X 10
-#define ROZMIAR_PLANSZY_Y 10
+#define ROZMIAR_PLANSZY_X 15
+#define ROZMIAR_PLANSZY_Y 15
 
 /*
  * rozmiar ekranu, po ktorym bedziemy rysowac (renderowac)
@@ -33,8 +39,8 @@
  * plansz powiekszony o 2 (ramka) i na X potrzebujemy
  * jeszcze jedno miejsce na nowa linie
  */
-#define ROZMIAR_EKRANU_X 13
-#define ROZMIAR_EKRANU_Y 12
+#define ROZMIAR_EKRANU_X 18
+#define ROZMIAR_EKRANU_Y 17
 
 
 // struktura naszego funsha, lista jednokierunkowa
@@ -99,6 +105,8 @@ void czekaj_na_kolejna_klatke() {
 }
 
 
+
+
 /**
  * funkcja do, ktora tworzy kolejny element funsha,
  * czyli tworzy nowy element listy jednokierunkowej.
@@ -141,10 +149,47 @@ funsh_t *powieksz_fusha(int nowe_x, int nowe_y) {
  * 2-> dol
  * 3-> lewo
  */
-int odczytaj_ruch_z_klawiatury() {
+int odczytaj_ruch_z_klawiatury(aktualny_kierunek) {
 
-	//printf("ruch z klawiaury\n");
-	return 1;
+	// tutaj bedziemy przechowywac odczytany znak z klawiatury
+	int odczytany_znak;
+
+	/*
+	 * posluzymy sie bibliteka ncurses do odczytania znaku. problem polega na tym
+	 * ze nie chcemy czekac az uzytkonik zatwierdzi wartosc przyciskiem enter-
+	 * tak jak ma to miejsce w tradycyjnym przpadku pobierania danych z klawiatury.
+	 * aby odczytywanie z klawiatury nie powodowalo blokady calej gry, uzywamy
+	 * wlasnie biblioteki ncurses. na poczatku inicjalizujemy jej uzycie
+	 * za pomoca funkcji initscr(), scrollok(), cbreak() i noecho();
+	 */
+	initscr();
+	scrollok(stdscr, 1);
+	cbreak();
+	noecho();
+	nodelay(stdscr, 1);
+
+	// pobieramy aktualnie wcisniety znak
+	odczytany_znak = getch();
+
+	// konczymy prace z bilbioteka ncurses
+	endwin();
+
+	// sprawdzamy wcisniety znak, kodujemy klawisze wasd
+	if (odczytany_znak == 'w') {
+		return 0;
+	}
+	else if (odczytany_znak == 'd') {
+		return 1;
+	}
+	else if (odczytany_znak == 's') {
+		return 2;
+	}
+	else if (odczytany_znak == 'a') {
+		return 3;
+	}
+
+	// jezeli nie bylo zmiany, zwracamy aktualny kierunek
+	return aktualny_kierunek;
 }
 
 
@@ -251,6 +296,7 @@ int przesun_funshem(funsh_t *glowa, int kierunek) {
 }
 
 
+
 /**
  * Funkcja, ktora rysuje nam cala scene gry na ekranie.
  * Zawsze jest to najtrudniejszy fragment kazdej gry,
@@ -262,8 +308,10 @@ int przesun_funshem(funsh_t *glowa, int kierunek) {
  * weza to gwiazdka a znaki |-_ utworza nam ramke planszy.
  * Do tego kazda linia planszy musi byc zakonczona
  * nowa linia \n aby wszystko poprawnie sie rysowalo.
+ * Jako drugi parametr dajemy wskaznik na jedzonko, umiescimy je
+ * na ekranie jako 'z'
  */
-void rysuj_gre(funsh_t *funsh) {
+void rysuj_gre(funsh_t *funsh, funsh_t *jedzonko) {
 
 	// nasz bufor ekranu
 	char ekran[ROZMIAR_EKRANU_Y][ROZMIAR_EKRANU_X];
@@ -293,17 +341,22 @@ void rysuj_gre(funsh_t *funsh) {
 	 * znak nowej linii
 	 */
 	for (int x = 0; x < ROZMIAR_EKRANU_X-1; x++) {
-		ekran[0][x] = '-';
-		ekran[ROZMIAR_EKRANU_Y-1][x] = '_';
+		ekran[0][x] = 'o';
+		ekran[ROZMIAR_EKRANU_Y-1][x] = 'o';
 	}
 
 	// rysuj ramke lewo/prawo
 	for (int y = 0; y < ROZMIAR_EKRANU_Y; y++) {
-		ekran[y][0] = '|';
+		ekran[y][0] = 'o';
 
 		// x-2 poniewaz ostatni x to nowa linia
-		ekran[y][ROZMIAR_EKRANU_X-2] = '|';
+		ekran[y][ROZMIAR_EKRANU_X-2] = 'o';
 	}
+
+
+	// rysujemy 'z' na ekranie jako jedzonko
+	ekran[jedzonko->y+1][jedzonko->x+1] = 'z';
+
 
 	/* umiesc glowe na ekranie
 	 * y+1 i x+1 poniewaz wezem w pamieci przesuwamy
@@ -316,6 +369,7 @@ void rysuj_gre(funsh_t *funsh) {
 		ekran[it->y+1][it->x+1] = '*';
 		it = it->next;
 	}
+
 
 	/* tak samo jak przy czyszczeniu ekranu-
 	 * nasz bufor ekranu musi byc zakonczony zerem
@@ -340,6 +394,18 @@ int main(int argc, char *argv[]) {
 	 * gracz jest poczatkiem listy wiec bedzie to glowa
 	 */
 	funsh_t *gracz;
+	funsh_t *jedzonko;
+
+	// tworzymy jedzenie, ktore umiescimy na pozycji 7,2
+	jedzonko = powieksz_fusha(7, 2);
+
+
+	/*
+	 * inicjalizacja generatora liczb pseudolosowych.
+	 * Brzmi jak ze star trek'a...
+	 */
+	srand(0);
+
 
 	/**
 	 * abym mogl wskazac na koniec weza i stworzyc
@@ -376,7 +442,7 @@ int main(int argc, char *argv[]) {
 	/* zmienna do przechowania kierunku, w ktorym
 	 * idzie funsh
 	 */
-	int kierunek_funsha;
+	int kierunek_funsha = 1;
 
 
 	/**
@@ -386,7 +452,22 @@ int main(int argc, char *argv[]) {
 	while (kontynuuj_gre) {
 
 		// odczytaj ruch gracza z klawiatury
-		kierunek_funsha = odczytaj_ruch_z_klawiatury();
+		kierunek_funsha = odczytaj_ruch_z_klawiatury(kierunek_funsha);
+
+		// sprawdzamy czy gracz nie zjadl jedzenia
+		if (gracz->x == jedzonko->x && gracz->y == jedzonko->y) {
+
+			// jezeli tak, ustawiamy wskaznik jedzenia next na gracza
+			jedzonko->next = gracz;
+
+			// teraz nasza glowa staje sie tym czym nasze jedzenie.. ehh
+			// a zawsze mowili- jestes tym co jesz...
+			gracz = jedzonko;
+
+			// tworzymy nowe jedzonko
+			jedzonko = powieksz_fusha(5, 5);
+		}
+
 
 		/**
 		 * rusz funshem, jezeli ta funkcja zwroci -1
@@ -403,12 +484,14 @@ int main(int argc, char *argv[]) {
 			continue;
 		}
 
+
+
 		// TODO jedzonko- innym razem!
 
 
 		// rysuj
 		czysc_ekran();
-		rysuj_gre(gracz);
+		rysuj_gre(gracz, jedzonko);
 		czekaj_na_kolejna_klatke();
 	}
 
