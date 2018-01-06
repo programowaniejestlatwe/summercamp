@@ -63,12 +63,12 @@ typedef struct {
  * sprzed epoki najprawdopodobniej takie rozwiazanie
  * powodowaloby poklatkowe rysowanie calej gry.
  * My mamy superszybkie komputery, wiec po prostu
- * brutalnie bedziemy wciskac nowa linie 100 razy i to nam
+ * brutalnie bedziemy wciskac nowa linie 99 razy i to nam
  * przeczysci ekran.
  */
 void czysc_ekran()
 {
-	// 99 nowych linii
+	// 0-99 nowych linii
 	char nowelinie[100];
 
 	// w petli wpisujemy do tablicy te nwoe linie
